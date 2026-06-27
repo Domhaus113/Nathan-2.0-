@@ -455,9 +455,8 @@ function wireAnalysisChat(){
     const msg=state.analysisChatInput.trim();
     if(!msg)return;
     state.analysisChatMessages.push({role:'user',text:msg});
-    state.analysisChatMessages.push({role:'nathan',text:'Backend pending \u2014 when deployed, Nathan will read the full account context (all creatives, performance history, Brain knowledge base, unit economics) before answering. Your question has been captured.'});
     state.analysisChatInput='';
-    render();
+    nathanReply(state.analysisChatMessages,function(){return nathanBaseSystem()+'\n\nCONTEXT: The user is viewing the whole-account analysis. Creatives in the account: '+creatives.map(function(c){return c.name+(c.metrics?' (ROAS '+(c.metrics.roas?c.metrics.roas.toFixed(2):'-')+'x, CPA R'+(c.metrics.cpa?Math.round(c.metrics.cpa):'-')+')':' (no data yet)');}).join('; ')+'.';});
   };
 }
 
@@ -1421,6 +1420,27 @@ function renderCreativeAnalysisBlock(c){
   </div>`;
 }
 
+async function askNathan(messages,system){
+  const r=await fetch('/api/chat',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({messages:messages,system:system})});
+  let data={};try{data=await r.json();}catch(e){}
+  if(!r.ok)throw new Error((data&&data.error)?data.error:('Request failed ('+r.status+')'));
+  return data.text||'(no response)';
+}
+function nathanBaseSystem(){
+  const av=(state.brain.avatars||[]).map(function(a){return '- '+a.name+' ('+a.id+'): '+(a.summary||'');}).join('\n');
+  const pb=(state.brain.playbooks||[]).map(function(p){return '- '+p.name+': '+(p.summary||'');}).join('\n');
+  const fw=(state.brain.frameworks||[]).map(function(f){return '- '+f.name;}).join('\n');
+  return 'You are Nathan, the Vets2Pets in-house creative strategy AI \u2014 a senior direct-response creative strategist, copywriter and paid-media advisor for Vets2Pets, a South African pet wellness brand (Omega-3 oil, Dental Powder, Joint Support) sold via Shopify, Takealot and Amazon. Dr Amir Anwary (a licensed SA vet with a large TikTok following) is the primary trust asset.\n\nUNIT ECONOMICS: AOV R750, breakeven CPA R292.88, target CPA R150-R170, breakeven ROAS 2.56x. Verdict tiers: Scaling (CPA<150), At target (150-170), Alive but not at target (171-292), Losing money (>292).\n\nRULES: exactly 3 hooks per creative; never name competitor products; stay SAHPRA-safe (never claim to treat, cure, remove disease or replace medication).\n\nPRIORITY AVATARS:\n'+av+'\n\nPLAYBOOKS:\n'+pb+'\n\nFRAMEWORKS:\n'+fw+'\n\nAnswer as Nathan: sharp, specific, commercially focused and practical. Your full Obsidian brain and live Pipeboard data are being connected next \u2014 for now, reason from the context provided here.';
+}
+function nathanReply(thread,sysOrFn){
+  const ph={role:'nathan',text:'\u2026'};
+  thread.push(ph);
+  render();
+  const sys=typeof sysOrFn==='function'?sysOrFn():sysOrFn;
+  const apiMsgs=thread.filter(function(m){return m!==ph;}).map(function(m){return {role:m.role==='user'?'user':'assistant',content:m.text};});
+  askNathan(apiMsgs,sys).then(function(t){ph.text=t;render();}).catch(function(e){ph.text='\u26a0\ufe0f '+(e&&e.message?e.message:'Could not reach Claude. Check ANTHROPIC_API_KEY in Vercel.');render();});
+}
+function fmtMsg(t){return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>').replace(/\n/g,'<br>');}
 function buildChatPanel(panelId,title,subtitle,contextNote,messages,inputValue){
   return `<div class="gbox" style="margin-top:18px;border-color:rgba(6,180,252,.25);background:rgba(6,180,252,.03);">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
@@ -1428,7 +1448,7 @@ function buildChatPanel(panelId,title,subtitle,contextNote,messages,inputValue){
         <i class="ti ti-message-circle" style="font-size:17px;color:#06B4FC;"></i>
         <div>
           <span style="font-size:14px;font-weight:500;color:#F4F2F3;">${title}</span>
-          <span style="font-size:11px;padding:3px 9px;border-radius:99px;background:rgba(6,180,252,.12);color:#06B4FC;margin-left:8px;">Backend pending</span>
+          <span style="font-size:11px;padding:3px 9px;border-radius:99px;background:rgba(74,222,128,.14);color:#4ade80;margin-left:8px;">Live \u00b7 Claude</span>
         </div>
       </div>
     </div>
@@ -1436,7 +1456,7 @@ function buildChatPanel(panelId,title,subtitle,contextNote,messages,inputValue){
     <div id="${panelId}-thread" style="background:var(--r);border:.5px solid var(--bd);border-radius:9px;padding:14px 16px;margin-bottom:12px;min-height:120px;max-height:320px;overflow-y:auto;">
       ${messages.length?messages.map(m=>`<div style="margin-bottom:12px;display:flex;align-items:flex-start;gap:10px;">
         <div style="width:24px;height:24px;border-radius:50%;background:${m.role==='user'?'var(--r2)':'rgba(6,180,252,.15)'};display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px;"><i class="ti ti-${m.role==='user'?'user':'sparkles'}" style="font-size:12px;color:${m.role==='user'?'var(--m)':'#06B4FC'};"></i></div>
-        <div style="flex:1;font-size:13px;color:#F4F2F3;line-height:1.6;">${m.text}</div>
+        <div style="flex:1;font-size:13px;color:#F4F2F3;line-height:1.6;">${fmtMsg(m.text)}</div>
       </div>`).join(''):`<div style="text-align:center;padding:20px 0;">
         <i class="ti ti-message-dots" style="font-size:22px;color:var(--d);display:block;margin-bottom:8px;"></i>
         <div style="font-size:13px;color:var(--m);margin-bottom:4px;">No messages yet</div>
@@ -1449,7 +1469,7 @@ function buildChatPanel(panelId,title,subtitle,contextNote,messages,inputValue){
     </div>
     <div style="font-size:11px;color:var(--m);margin-top:10px;background:var(--r);border:.5px solid var(--bd);border-radius:7px;padding:8px 11px;display:flex;align-items:center;gap:7px;">
       <i class="ti ti-info-circle" style="font-size:12px;color:#06B4FC;"></i>
-      <span>When deployed to Vercel, this calls Claude with the full context (creative data, Brain knowledge, performance history) injected automatically. For now, your message is captured but no AI response is generated.</span>
+      <span>Nathan is live \u2014 powered by Claude, answering from your avatars, playbooks, frameworks and unit economics. Live Pipeboard data and the full Obsidian brain are being connected next.</span>
     </div>
   </div>`;
 }
@@ -1480,9 +1500,8 @@ function renderTrkPerf(el){
     if(!msg)return;
     if(!state.creativeChat[c.name])state.creativeChat[c.name]=[];
     state.creativeChat[c.name].push({role:'user',text:msg});
-    state.creativeChat[c.name].push({role:'nathan',text:'Backend pending \u2014 when deployed, Nathan will read this creative\u2019s concept card, all performance history, and the Brain knowledge base before answering. Your question has been captured.'});
     state.creativeChatInput='';
-    render();
+    nathanReply(state.creativeChat[c.name],function(){var m2=c.metrics;return nathanBaseSystem()+'\n\nCONTEXT: The user is asking about ONE specific creative named "'+c.name+'". Product '+c.prod+', awareness '+c.aw+', angle '+c.angle+', avatar '+c.avatar+'. Problem: '+(c.problem||'-')+'. '+(m2?'Metrics \u2014 ROAS '+m2.roas+'x, CPA R'+Math.round(m2.cpa)+', spend R'+Math.round(m2.spend)+', purchases '+m2.purchases+'.':'No performance data yet.');});
   };
   document.getElementById('saveManualMetricsBtn').onclick=()=>{
     const num=id=>{const v=document.getElementById(id).value;const n=parseFloat(v);return isNaN(n)?0:n;};
