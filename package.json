@@ -1,0 +1,7 @@
+{
+  "name": "nathan-vets2pets",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Nathan — Vets2Pets Creative Strategy AI",
+  "engines": { "node": ">=18" }
+}
