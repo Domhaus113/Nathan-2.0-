@@ -24,7 +24,7 @@ module.exports = async (req, res) => {
     if (typeof body === "string") { try { body = JSON.parse(body); } catch (e) { body = {}; } }
     const messages = Array.isArray(body.messages) ? body.messages : [];
     let system = typeof body.system === "string" ? body.system : "You are Nathan, a senior creative strategist for Vets2Pets.";
-    const model = process.env.CLAUDE_MODEL || "claude-sonnet-4-20250514";
+    const model = process.env.CLAUDE_MODEL || "claude-sonnet-4-6";
     if (!messages.length) {
       res.status(400).json({ error: "No messages provided." });
       return;
